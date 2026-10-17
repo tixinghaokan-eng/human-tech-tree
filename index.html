@@ -1,0 +1,1019 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>人类科技树</title>
+<style>
+  :root{
+    --bg:#070a0f; --line:#1d2734; --txt:#dce5ef; --dim:#7a8899; --accent:#5aa9e6;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{
+    margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--txt);
+    -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
+    font-family:-apple-system,"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  }
+
+  /* ── 画布 ─────────────────────────────── */
+  #tree{position:absolute; top:0; left:0; right:0; bottom:0; width:100%; height:100%;
+    touch-action:none; cursor:grab;
+    background:radial-gradient(circle at 32% 18%, #101a28 0%, #070a0f 62%)}
+  #tree.grabbing{cursor:grabbing}
+
+  .band{fill:#ffffff05}
+  .band.alt{fill:#ffffff0b}
+  .era-line{stroke:#ffffff12; stroke-width:1}
+
+  .edge{fill:none; stroke:#26313f; stroke-width:1.15; transition:stroke .16s,opacity .16s,stroke-width .16s}
+  .edge.hl{stroke:var(--accent); stroke-width:2; opacity:1}
+  .edge.dim{opacity:.07}
+
+  .node{cursor:pointer; transition:opacity .16s}
+  .node .body{fill:#131b26; stroke:#2b3849; stroke-width:1; transition:stroke .16s,fill .16s}
+  .node .accent{fill:currentColor; opacity:.9}
+  .node .nm{fill:#dce5ef; font-size:13.5px}
+  .node .yr{fill:#6e7d90; font-size:10.5px}
+  .node.rel .body{stroke:currentColor; stroke-width:1.4; fill:#18222f}
+  .node.sel .body{stroke:#ffffff; stroke-width:1.8; fill:#1b2735}
+  .node.hit .body{stroke:#ffffff; stroke-width:1.6}
+  .node.dim{opacity:.13}
+
+  /* ── 时代轴 ───────────────────────────── */
+  #axis{position:absolute; left:0; right:0; top:var(--hdr,58px); height:34px; z-index:4; overflow:hidden;
+    pointer-events:none; border-bottom:1px solid #ffffff0f;
+    background:linear-gradient(#070a0ff2 55%,#070a0f99 80%,#070a0f00)}
+  #axis .ey{position:absolute; top:0; height:34px; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; overflow:hidden; white-space:nowrap; border-left:1px solid #ffffff14}
+  #axis .ey b{font-size:12px; font-weight:600; color:#9db0c4; letter-spacing:.06em}
+  #axis .ey s{font-size:10px; color:#5a6a7d; text-decoration:none; margin-top:1px}
+  #axis .ey.narrow s{display:none}
+  #axis .ey.hide{display:none}
+
+  /* ── 顶栏 ─────────────────────────────── */
+  header{position:absolute; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; gap:12px;
+    padding:12px 14px; pointer-events:none; flex-wrap:wrap;
+    background:linear-gradient(#070a0fee,#070a0f00)}
+  header>*{pointer-events:auto}
+  h1{margin:0; font-size:15px; font-weight:600; letter-spacing:.08em; white-space:nowrap}
+  h1 span{color:var(--dim); font-size:11.5px; font-weight:400; margin-left:8px; letter-spacing:0}
+
+  .search{position:relative; flex:0 1 210px; min-width:140px}
+  .search input{width:100%; padding:7px 12px; font-size:13px; color:var(--txt); outline:none;
+    -webkit-appearance:none; appearance:none;
+    border:1px solid var(--line); border-radius:9px; background:#0c121b}
+  .search input:focus{border-color:#31506f}
+  #results{position:absolute; top:112%; left:0; right:0; z-index:9; display:none;
+    max-height:290px; overflow-y:auto; background:#0f1722; border:1px solid var(--line); border-radius:10px}
+  #results.open{display:block}
+  .res{display:flex; gap:8px; justify-content:space-between; align-items:baseline; width:100%;
+    padding:7px 11px; font-size:12.5px; color:var(--txt); text-align:left; background:none; border:0; cursor:pointer}
+  .res:hover{background:#182130}
+  .res span{color:var(--dim); font-size:11px; white-space:nowrap}
+
+  .legend{display:flex; gap:6px; flex-wrap:wrap; margin-left:auto}
+  .lg{display:flex; align-items:center; gap:5px; padding:4px 10px; font-size:11.5px; color:var(--dim);
+    flex:0 0 auto; white-space:nowrap;
+    background:#0c121b; border:1px solid var(--line); border-radius:999px; cursor:pointer; transition:.15s}
+  .lg i{width:8px; height:8px; border-radius:50%; background:currentColor}
+  .lg:hover{color:var(--txt)}
+  .lg.on{color:var(--txt); background:#17212e; border-color:#31435a}
+
+  .tools{display:flex; gap:6px}
+  .tools button{height:30px; min-width:32px; padding:0 9px; font-size:12.5px; color:var(--txt);
+    background:#0c121b; border:1px solid var(--line); border-radius:9px; cursor:pointer}
+  .tools button:hover{background:#17212e}
+
+  /* ── 详情面板 ─────────────────────────── */
+  #panel{position:absolute; top:66px; right:14px; z-index:6; width:344px; max-height:calc(100% - 96px);
+    overflow-y:auto; padding:18px; background:#0e151ff2; border:1px solid var(--line); border-radius:14px;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    opacity:0; transform:translateX(18px); pointer-events:none; transition:.22s ease}
+  #panel.open{opacity:1; transform:none; pointer-events:auto}
+  #panel .close{position:absolute; top:10px; right:12px; font-size:20px; line-height:1; color:var(--dim);
+    background:none; border:0; cursor:pointer}
+  #panel .close:hover{color:var(--txt)}
+  #panel .catline{width:36px; height:3px; border-radius:2px; margin-bottom:12px}
+  #panel h2{margin:0 0 10px; font-size:19px; font-weight:600}
+  #panel .meta{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px}
+  #panel .tag{padding:3px 9px; font-size:11px; color:#a9b8c9; background:#141d29;
+    border:1px solid var(--line); border-radius:999px}
+  #panel p{margin:0; font-size:13px; line-height:1.75; color:#a6b4c4}
+  #panel h3{margin:18px 0 8px; font-size:11px; font-weight:600; letter-spacing:.12em; color:var(--dim)}
+  .chips{display:flex; flex-wrap:wrap; gap:6px}
+  .chip{display:flex; align-items:center; gap:6px; padding:5px 9px; font-size:12px; color:var(--txt);
+    background:#141d29; border:1px solid var(--line); border-radius:8px; cursor:pointer}
+  .chip:hover{background:#1b2533; border-color:#33445c}
+  .chip i{width:6px; height:6px; border-radius:50%; background:var(--c,#666); flex:0 0 auto}
+  .chip em{font-style:normal; color:var(--dim); font-size:10.5px}
+
+  /* ── 缩略图与提示 ─────────────────────── */
+  #mini{position:absolute; right:14px; bottom:14px; z-index:5; padding:6px; cursor:pointer;
+    background:#0b111acc; border:1px solid var(--line); border-radius:10px}
+  #mini svg{display:block; width:190px}
+  #mini .vp{fill:#5aa9e626; stroke:#5aa9e6; stroke-width:6; vector-effect:non-scaling-stroke}
+  #hint{position:absolute; left:16px; bottom:16px; z-index:4; font-size:11.5px; color:#57677a; pointer-events:none}
+
+  @media (max-width:780px){
+    header{padding:10px; gap:8px}
+    h1{font-size:13px} h1 span{display:none}
+    .legend{order:3; width:100%; margin-left:0; flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px;
+      scrollbar-width:none}
+    .legend::-webkit-scrollbar{display:none}
+    .tools{margin-left:auto}
+    #panel{top:auto; left:10px; right:10px; bottom:10px; width:auto; max-height:46vh; border-radius:16px;
+      transform:translateY(18px)}
+    #panel.open{transform:none}
+    #mini svg{width:132px}
+    #hint{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="axis"></div>
+
+<svg id="tree" xmlns="http://www.w3.org/2000/svg">
+  <g id="world">
+    <g id="bands"></g>
+    <g id="edges"></g>
+    <g id="nodes"></g>
+  </g>
+</svg>
+
+<header>
+  <h1>人类科技树<span id="stat"></span></h1>
+  <div class="search">
+    <input id="q" type="search" placeholder="搜索技术、年代…" autocomplete="off">
+    <div id="results"></div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="tools">
+    <button data-act="out" title="缩小">−</button>
+    <button data-act="in" title="放大">+</button>
+    <button data-act="fit" title="显示全图">适应</button>
+    <button data-act="reset" title="回到起点">100%</button>
+  </div>
+</header>
+
+<aside id="panel"></aside>
+<div id="mini"><svg xmlns="http://www.w3.org/2000/svg"></svg></div>
+<div id="hint">滚轮 / 双指缩放 · 拖拽平移 · 点击节点查看前置与衍生</div>
+
+<script>
+/* 人类科技树数据集
+   节点 = 一项技术 / 一门学问；pre = 前置条件（有向边：前置 -> 本节点） */
+
+const ERAS = [
+  { name: '旧石器时代', sub: '约260万年前 – 前1万年' },
+  { name: '农业革命', sub: '前1万年 – 前3500年' },
+  { name: '古典文明', sub: '前3500 – 公元500年' },
+  { name: '中世纪', sub: '500 – 1400年' },
+  { name: '文艺复兴与大航海', sub: '1400 – 1700年' },
+  { name: '工业革命', sub: '1700 – 1870年' },
+  { name: '电气与化工', sub: '1870 – 1945年' },
+  { name: '信息时代', sub: '1945 – 2000年' },
+  { name: '智能时代', sub: '2000年 – 至今' },
+];
+
+const NODES = [
+  /* ── 0 旧石器时代 ───────────────────────────── */
+  { id: 'stone', name: '打制石器', era: 0, year: '约260万年前', cat: 'material',
+    desc: '敲击石核剥下锋利石片，人类第一项「可复制」的技术。它把捕猎、切割、刮削的能力从身体外置到工具上。', pre: [] },
+  { id: 'fire', name: '用火', era: 0, year: '约100万年前', cat: 'energy',
+    desc: '掌握取火与保火，等于拥有了第一份可调用的能量：取暖、驱兽、夜间活动，最终通向烹饪与冶炼。', pre: ['stone'] },
+  { id: 'clothing', name: '缝制衣物', era: 0, year: '约10万年前', cat: 'material',
+    desc: '骨针与皮绳让人类得以离开热带，是走出非洲、进入寒带的前提。', pre: ['stone'] },
+  { id: 'weaving', name: '编织与纺织', era: 0, year: '约3万年前', cat: 'material',
+    desc: '把纤维捻成线、再交织成面。绳索与织物后来成为帆、纸、弓弦与机器皮带的共同源头。', pre: ['clothing'] },
+  { id: 'spear', name: '长矛', era: 0, year: '约40万年前', cat: 'mech',
+    desc: '把杠杆与臂力结合的第一件复合工具，让人类成为顶级掠食者。', pre: ['stone'] },
+  { id: 'bow', name: '弓箭', era: 0, year: '约6万年前', cat: 'mech',
+    desc: '用弹性势能储能再瞬间释放，第一次让「储能」成为设计目标。', pre: ['spear'] },
+  { id: 'fishing', name: '渔网与骨钩', era: 0, year: '约4万年前', cat: 'life',
+    desc: '从陆地向水域扩展食物来源，定居点第一次可以沿河海岸长期驻扎。', pre: ['clothing'] },
+  { id: 'language', name: '语言', era: 0, year: '约10万年前', cat: 'info',
+    desc: '可无限组合的符号系统。技术从此可以跨代累积，而不必每次从头发明。', pre: [] },
+  { id: 'cave_art', name: '洞穴壁画与仪式', era: 0, year: '约4万年前', cat: 'info',
+    desc: '最早的「外部存储」：把信息写在身体之外，是文字与符号思维的预演。', pre: ['language'] },
+  { id: 'counting', name: '计数与记账', era: 0, year: '约4万年前', cat: 'info',
+    desc: '刻痕、绳结、算筹，把数量抽象成可操作的对象，数字与账目由此开始。', pre: ['language'] },
+
+  /* ── 1 农业革命 ─────────────────────────────── */
+  { id: 'pottery', name: '陶器', era: 1, year: '约2万年前', cat: 'material',
+    desc: '用火改造黏土——人类第一次合成自然界不存在的材料，也第一次拥有可长期储粮的容器。', pre: ['fire'] },
+  { id: 'mining', name: '采矿', era: 1, year: '约8000年前', cat: 'material',
+    desc: '为了燧石、盐与颜料深入地下，随后挖出的是矿石与金属，也挖出了地下工程。', pre: ['fire', 'stone'] },
+  { id: 'copper', name: '铜冶炼', era: 1, year: '约7000年前', cat: 'material',
+    desc: '把石头加热到熔融并浇铸成型，材料第一次可以被「重铸」，不再受原石形状约束。', pre: ['fire', 'pottery', 'mining'] },
+  { id: 'agriculture', name: '农业', era: 1, year: '约1.1万年前', cat: 'life',
+    desc: '把狩猎采集的随机供给，变成可预测、可储存、可征税的产出。人口、城市与国家都建立在这之上。', pre: ['fire', 'stone', 'pottery'] },
+  { id: 'domestication', name: '驯化动植物', era: 1, year: '约1.1万年前', cat: 'life',
+    desc: '让其他物种按人类需求繁殖，本质是对基因组的长期定向筛选，早于基因概念一万年。', pre: ['bow'] },
+  { id: 'dwelling', name: '定居聚落', era: 1, year: '约1万年前', cat: 'mech',
+    desc: '泥砖与木构把「临时营地」变成固定资产，从此有了储藏、邻里与围墙。', pre: ['stone', 'fire'] },
+  { id: 'calendar', name: '历法', era: 1, year: '约8000年前', cat: 'science',
+    desc: '观测日月星辰以预判季节，是农业需要的时序知识，也是天文学与数学的起点。', pre: ['agriculture'] },
+  { id: 'irrigation', name: '灌溉', era: 1, year: '约6000年前', cat: 'life',
+    desc: '把河流改造成可调度的供给系统，同时催生了水利工程与集中管理的社会组织。', pre: ['agriculture'] },
+  { id: 'wheel', name: '轮子', era: 1, year: '约5500年前', cat: 'mech',
+    desc: '把滑动摩擦换成滚动摩擦，运输、制陶轮与水轮都源于同一项几何洞察。', pre: ['agriculture', 'mining'] },
+  { id: 'sail', name: '帆船', era: 1, year: '约7000年前', cat: 'mech',
+    desc: '第一次利用自然界的流体动力，让货物与观念可以跨越海洋而非绕过海岸。', pre: ['weaving', 'dwelling'] },
+  { id: 'herbal', name: '草药与外科', era: 1, year: '约6000年前', cat: 'life',
+    desc: '对植物药性与人体损伤的系统经验，是医学在没有生理学之前的全部家底。', pre: ['agriculture'] },
+
+  /* ── 2 古典文明 ─────────────────────────────── */
+  { id: 'bronze', name: '青铜', era: 2, year: '前3300年', cat: 'material',
+    desc: '合金化让金属同时具备硬度与韧性。青铜兵器与礼器支撑起第一批国家和常备军。', pre: ['copper', 'mining'] },
+  { id: 'glass', name: '玻璃', era: 2, year: '前3500年', cat: 'material',
+    desc: '高温下熔融石英得到的透明材料，两千年后成为透镜、望远镜与光纤的基础。', pre: ['pottery', 'copper'] },
+  { id: 'writing', name: '文字', era: 2, year: '前3200年', cat: 'info',
+    desc: '把语言编码为可持久、可远距离传输的符号，法律、宗教、科学与官僚制度都靠它运行。', pre: ['counting', 'agriculture'] },
+  { id: 'papyrus', name: '莎草纸与笔墨', era: 2, year: '前3000年', cat: 'info',
+    desc: '廉价书写载体的出现，让文字从神庙走向市场与书房。', pre: ['writing', 'weaving'] },
+  { id: 'alphabet', name: '字母文字', era: 2, year: '前1000年', cat: 'info',
+    desc: '把音节或音素映射为少量符号，识字所需记忆量骤减，文字从祭司阶层扩散到普通商人。', pre: ['writing'] },
+  { id: 'math', name: '数学', era: 2, year: '前3000年', cat: 'science',
+    desc: '从丈量土地、分配粮食与计算税赋中抽象出的形式系统，是其余一切科学的通用语言。', pre: ['writing', 'counting'] },
+  { id: 'geometry', name: '几何学', era: 2, year: '前2000年', cat: 'science',
+    desc: '把空间关系变成可证明的定理，建筑、天文与后来的机械设计都建立在它之上。', pre: ['math'] },
+  { id: 'astronomy', name: '天文学', era: 2, year: '前2000年', cat: 'science',
+    desc: '精确记录天体运动，既用于授时与导航，也提供了最早可检验的自然规律模型。', pre: ['calendar', 'math'] },
+  { id: 'medicine', name: '系统医学', era: 2, year: '前400年', cat: 'life',
+    desc: '把疾病从神罚解释转向自然原因与临床观察，形成可传授的诊断与预后体系。', pre: ['herbal', 'writing'] },
+  { id: 'iron', name: '冶铁', era: 2, year: '前1200年', cat: 'material',
+    desc: '铁矿石分布远比铜锡广泛，更高炉温与渗碳工艺让工具廉价到可以普及到农夫手中。', pre: ['bronze', 'mining'] },
+  { id: 'steel', name: '钢', era: 2, year: '前300年', cat: 'material',
+    desc: '控制含碳量的铁：硬度与韧性的可调平衡，后来成为几乎所有机械与结构的骨架。', pre: ['iron'] },
+  { id: 'concrete', name: '混凝土', era: 2, year: '前200年', cat: 'material',
+    desc: '把火山灰、石灰与骨料拌合成可塑材料，硬化后抗压如水石，罗马用它浇筑了整个帝国。', pre: ['stone_arch', 'mining'] },
+  { id: 'stone_arch', name: '石砌建筑与拱券', era: 2, year: '前3000年', cat: 'mech',
+    desc: '把石头的压应力沿拱线传递，第一次用几何而非材料强度来支撑巨大重量。', pre: ['dwelling', 'bronze'] },
+  { id: 'road', name: '道路网', era: 2, year: '前3000年', cat: 'mech',
+    desc: '标准化的路基与里程，把分散的聚落连成可被统一调度的一整个帝国。', pre: ['wheel', 'dwelling'] },
+  { id: 'aqueduct', name: '渡槽与城市供水', era: 2, year: '前300年', cat: 'mech',
+    desc: '依靠重力与恒定坡度长距离输水，使百万人口的城市第一次在卫生上可行。', pre: ['stone_arch', 'concrete'] },
+  { id: 'lever', name: '杠杆与简单机械', era: 2, year: '前300年', cat: 'mech',
+    desc: '阿基米德把力与力臂的关系写成可计算的比例，机械设计第一次有了理论。', pre: ['geometry'] },
+  { id: 'gear', name: '齿轮', era: 2, year: '前300年', cat: 'mech',
+    desc: '用齿形啮合传递转速与扭矩，同时把「传动」从简单机械中独立出来。', pre: ['wheel', 'lever'] },
+  { id: 'waterwheel', name: '水车与水磨', era: 2, year: '前300年', cat: 'energy',
+    desc: '第一次让非生物动力持续驱动磨盘与风箱，是「动力自由」的长期来源。', pre: ['gear', 'wheel'] },
+  { id: 'catapult', name: '弩炮与攻城机械', era: 2, year: '前400年', cat: 'mech',
+    desc: '把弹性与扭簧储能、齿轮与棘轮结合成可重复发射的机械，工程与军事首次深度绑定。', pre: ['lever', 'gear'] },
+  { id: 'horse_harness', name: '马具与马镫', era: 2, year: '前500年', cat: 'mech',
+    desc: '颈圈、挽具与马镫把畜力高效接入运输与战争，也改变了欧亚大陆的权力格局。', pre: ['domestication', 'wheel'] },
+  { id: 'paper', name: '造纸', era: 2, year: '105年', cat: 'info',
+    desc: '用植物纤维打浆抄造成廉价的书写面，信息复制的成本因此下降一个数量级。', pre: ['weaving', 'writing'] },
+
+  /* ── 3 中世纪 ───────────────────────────────── */
+  { id: 'gunpowder', name: '火药', era: 3, year: '约850年', cat: 'energy',
+    desc: '硝石、硫磺与木炭的配比，是第一种可控的化学爆炸——化学能第一次被当作动力使用。', pre: ['pottery', 'mining'] },
+  { id: 'compass', name: '指南针', era: 3, year: '约1040年', cat: 'info',
+    desc: '让方向不再依赖天象，阴天与远洋航行第一次变得可靠。', pre: ['iron', 'astronomy'] },
+  { id: 'printing_wood', name: '雕版印刷', era: 3, year: '约700年', cat: 'info',
+    desc: '整版刻字反复拓印，书籍的产能首次脱离抄写员的手速。', pre: ['paper', 'writing'] },
+  { id: 'numerals', name: '阿拉伯数字与零', era: 3, year: '约800年', cat: 'info',
+    desc: '位值制与零的引入，让笔算替代算盘，大幅降低了数学操作的门槛。', pre: ['math', 'alphabet'] },
+  { id: 'algebra', name: '代数', era: 3, year: '约830年', cat: 'science',
+    desc: '用符号代替未知量并按规则变形，把「解一类问题」变成可机械执行的过程。', pre: ['numerals'] },
+  { id: 'optics', name: '光学', era: 3, year: '约1000年', cat: 'science',
+    desc: '用实验确定光沿直线传播、反射与折射规律，并确立「观察—假设—检验」的研究范式。', pre: ['geometry', 'glass'] },
+  { id: 'alchemy', name: '炼金术', era: 3, year: '约1100年', cat: 'science',
+    desc: '目标虽未实现，却留下了蒸馏、结晶、提纯等实验技术与大量物质知识，近代化学由此脱胎。', pre: ['glass', 'herbal'] },
+  { id: 'distillation', name: '蒸馏器', era: 3, year: '约1100年', cat: 'material',
+    desc: '利用沸点差分离混合物，是提纯手段的第一次通用化，也是化学工程的开端。', pre: ['glass', 'pottery'] },
+  { id: 'windmill', name: '风车', era: 3, year: '约1100年', cat: 'energy',
+    desc: '把风能接入磨面、锯木与排水，让动力可以在没有河流的地方获得。', pre: ['waterwheel', 'gear'] },
+  { id: 'blast_furnace', name: '高炉', era: 3, year: '约1300年', cat: 'material',
+    desc: '连续鼓风与更高炉温使铁水可连续流出，钢铁从此进入批量生产阶段。', pre: ['iron', 'waterwheel'] },
+  { id: 'mech_clock', name: '机械钟', era: 3, year: '约1280年', cat: 'science',
+    desc: '擒纵机构把连续能量切成等时间隔，是第一个精密自动化装置，也重塑了社会的时间观念。', pre: ['gear', 'blast_furnace'] },
+  { id: 'university', name: '大学', era: 3, year: '1088年', cat: 'science',
+    desc: '把知识传授与学位授予制度化，形成了跨世代积累和批评知识的稳定机构。', pre: ['writing', 'alphabet'] },
+  { id: 'heavy_plough', name: '重犁', era: 3, year: '约900年', cat: 'life',
+    desc: '带铁铧的重犁能翻动黏重土壤，把北欧的森林与湿地变成粮田。', pre: ['iron', 'horse_harness'] },
+  { id: 'crop_rotation', name: '三圃轮作', era: 3, year: '约900年', cat: 'life',
+    desc: '轮换休耕与豆科作物以恢复地力，在同样土地上显著提高了长期产出。', pre: ['heavy_plough'] },
+  { id: 'rudder', name: '舵与三角帆', era: 3, year: '约1000年', cat: 'mech',
+    desc: '尾舵与能够逆风换向的纵帆，使船只可横渡大洋而非沿岸摸索。', pre: ['sail', 'iron'] },
+  { id: 'cannon', name: '火炮', era: 3, year: '约1330年', cat: 'mech',
+    desc: '把火药的化学能装进金属管定向释放，攻城与海战规则被彻底重写。', pre: ['gunpowder', 'bronze', 'steel'] },
+
+  /* ── 4 文艺复兴与大航海 ─────────────────────── */
+  { id: 'movable_type', name: '活字印刷', era: 4, year: '1450年', cat: 'info',
+    desc: '可复用字模与压印机使书籍成本骤降，知识得以在几十年内跨欧洲扩散，科学革命的技术前提。', pre: ['printing_wood', 'paper', 'steel'] },
+  { id: 'navigation', name: '远洋航海', era: 4, year: '1450年', cat: 'mech',
+    desc: '把罗盘、舵、星表与帆船组合成能往返未知海域的系统，世界第一次连成一张网络。', pre: ['compass', 'rudder', 'astronomy', 'sail'] },
+  { id: 'ocean_trade', name: '全球贸易网络', era: 4, year: '1550年', cat: 'info',
+    desc: '商品、作物、白银与疾病沿航线全球流动，需求与资源第一次在世界尺度上匹配。', pre: ['navigation', 'cannon'] },
+  { id: 'heliocentrism', name: '日心说', era: 4, year: '1543年', cat: 'science',
+    desc: '把地球逐出宇宙中心，动摇了以权威解释自然的整个体系，为近代科学开路。', pre: ['astronomy', 'optics'] },
+  { id: 'anatomy', name: '人体解剖学', era: 4, year: '1543年', cat: 'life',
+    desc: '以亲手解剖取代背诵古籍，医学第一次建立在可复核的观察之上。', pre: ['medicine', 'movable_type'] },
+  { id: 'circulation', name: '血液循环', era: 4, year: '1628年', cat: 'life',
+    desc: '用定量估算证明血液在体内循环，生理学由「结构描述」进入「功能机制」。', pre: ['anatomy'] },
+  { id: 'telescope', name: '望远镜', era: 4, year: '1608年', cat: 'science',
+    desc: '两片透镜把人类的观测范围放大数十倍，木星卫星与月面环形山随即推翻了旧天文学。', pre: ['optics', 'glass'] },
+  { id: 'microscope', name: '显微镜', era: 4, year: '1590年', cat: 'science',
+    desc: '把观测尺度推向肉眼之外，为细胞、微生物与后来的细菌学说准备了眼睛。', pre: ['optics', 'glass'] },
+  { id: 'thermometer', name: '温度计', era: 4, year: '1600年', cat: 'science',
+    desc: '把冷热变成可读的数字，使热学从感觉变成可测量的科学。', pre: ['glass'] },
+  { id: 'scientific_method', name: '科学方法', era: 4, year: '1620年', cat: 'science',
+    desc: '受控实验、数学化假设与可重复验证成为标准流程，知识生产从此有了可自我纠错的机制。', pre: ['heliocentrism', 'movable_type'] },
+  { id: 'vacuum_pump', name: '真空泵', era: 4, year: '1650年', cat: 'science',
+    desc: '主动抽走空气制造真空，第一次把「没有物质的空间」变成实验室里的常规条件。', pre: ['scientific_method', 'mech_clock'] },
+  { id: 'barometer', name: '气压计', era: 4, year: '1643年', cat: 'science',
+    desc: '以水银柱高度读出大气压强，直接催生了气压与天气、真空与蒸汽动力之间的联系。', pre: ['vacuum_pump', 'thermometer'] },
+  { id: 'calculus', name: '微积分', era: 4, year: '1687年', cat: 'science',
+    desc: '用无穷小分析变化率与累积量，为一切描述运动的物理定律提供了书写方式。', pre: ['algebra', 'geometry', 'scientific_method'] },
+  { id: 'gravity', name: '万有引力', era: 4, year: '1687年', cat: 'science',
+    desc: '用同一组方程同时解释苹果落地与行星轨道，自然界第一次被证明可用统一规律描述。', pre: ['calculus', 'heliocentrism'] },
+  { id: 'lathe', name: '精密机床', era: 4, year: '1600年', cat: 'mech',
+    desc: '车床与螺纹切削让零件可以被复制到极高精度，是一切机械工业的母机。', pre: ['mech_clock', 'gear'] },
+  { id: 'gun_flintlock', name: '燧发枪', era: 4, year: '1600年', cat: 'mech',
+    desc: '机械点火取代火绳，使枪械可靠、廉价且可标准化大生产，也推动了精密加工。', pre: ['cannon', 'lathe'] },
+  { id: 'chem_boyle', name: '气体化学', era: 4, year: '1660年', cat: 'science',
+    desc: '以定量实验研究气体体积、压力与反应，元素与化合物概念逐渐取代炼金术的四元素说。', pre: ['alchemy', 'vacuum_pump'] },
+  { id: 'steam_pump', name: '蒸汽泵', era: 4, year: '1698年', cat: 'energy',
+    desc: '用冷凝产生的压强差抽水，第一次让化石燃料直接变成机械动力。', pre: ['vacuum_pump', 'lathe', 'blast_furnace'] },
+
+  /* ── 5 工业革命 ─────────────────────────────── */
+  { id: 'steam_engine', name: '蒸汽机', era: 5, year: '1769年', cat: 'energy',
+    desc: '外置冷凝器使热机可连续做功，动力第一次不再依赖河流与风向，工厂可以建在任何地方。', pre: ['steam_pump', 'lathe', 'blast_furnace'] },
+  { id: 'spinning', name: '珍妮纺纱机', era: 5, year: '1764年', cat: 'mech',
+    desc: '一台机器同时驱动多锭纺纱，把纺织从家庭手工变成集中生产的工业。', pre: ['weaving', 'lathe', 'waterwheel'] },
+  { id: 'power_loom', name: '动力织机', era: 5, year: '1785年', cat: 'mech',
+    desc: '织布也交给机械，纺与织的产能同时跃升，棉纺织品成为第一种全球化工业品。', pre: ['spinning', 'steam_engine'] },
+  { id: 'factory', name: '工厂制度', era: 5, year: '1790年', cat: 'mech',
+    desc: '把机器、动力与工人集中到同一屋檐下按节拍协同，现代组织管理由此诞生。', pre: ['power_loom', 'steam_engine'] },
+  { id: 'modern_chem', name: '近代化学理论', era: 5, year: '1789年', cat: 'science',
+    desc: '拉瓦锡的质量守恒与氧化说把化学变成定量科学，为化工、肥料与材料工业奠定基础。', pre: ['chem_boyle', 'barometer'] },
+  { id: 'battery', name: '电池', era: 5, year: '1800年', cat: 'energy',
+    desc: '伏打电堆提供稳定持续的电流，电学从瞬间放电的实验变成可研究、可利用的学科。', pre: ['modern_chem', 'copper'] },
+  { id: 'rails', name: '铁轨', era: 5, year: '1767年', cat: 'mech',
+    desc: '把矿车轮缘约束在钢轨上，滚动阻力极低，是「大规模陆运」的物理前提。', pre: ['iron', 'road'] },
+  { id: 'locomotive', name: '蒸汽机车', era: 5, year: '1804年', cat: 'mech',
+    desc: '自带动力与燃料的车头，让轨道运输摆脱了畜力与固定绞盘。', pre: ['steam_engine', 'rails'] },
+  { id: 'railway', name: '铁路网', era: 5, year: '1825年', cat: 'mech',
+    desc: '统一的轨距、时刻表与信号系统，把陆地运输成本压低一个数量级，也创造了标准时间。', pre: ['locomotive', 'rails', 'steam_engine'] },
+  { id: 'steamship', name: '蒸汽轮船', era: 5, year: '1807年', cat: 'mech',
+    desc: '不再依赖风向的船舶，使跨洋航运首次可以按时刻表运行。', pre: ['steam_engine', 'sail'] },
+  { id: 'electromagnetism', name: '电磁学', era: 5, year: '1820年', cat: 'science',
+    desc: '电流生磁、磁变生电，把电与磁统一成同一个场，此后一切电气技术都源于它。', pre: ['battery', 'modern_chem'] },
+  { id: 'electric_motor', name: '电动机', era: 5, year: '1834年', cat: 'energy',
+    desc: '把电直接转成旋转动力，机械第一次可以做得干净、安静且可按需分布在任意位置。', pre: ['electromagnetism', 'battery'] },
+  { id: 'telegraph', name: '电报', era: 5, year: '1837年', cat: 'info',
+    desc: '信息以电信号传输，速度第一次超过任何运输工具，市场与指挥体系随之同步化。', pre: ['electromagnetism', 'battery'] },
+  { id: 'photography', name: '摄影', era: 5, year: '1839年', cat: 'info',
+    desc: '把光学影像永久固定在化学感光层上，人类第一次可以精确复制现实世界的画面。', pre: ['optics', 'modern_chem'] },
+  { id: 'chemical_industry', name: '化学工业', era: 5, year: '1791年', cat: 'material',
+    desc: '硫酸、纯碱与漂白粉的规模化生产，使化工品成为可廉价获得的工业原料。', pre: ['modern_chem', 'steam_engine'] },
+  { id: 'vaccination', name: '疫苗', era: 5, year: '1796年', cat: 'life',
+    desc: '用弱化的病原体训练免疫系统，人类第一次主动预防而非被动治疗传染病。', pre: ['anatomy', 'medicine'] },
+  { id: 'germ_theory', name: '细菌学说', era: 5, year: '1861年', cat: 'life',
+    desc: '证明微生物是感染与腐败的原因，外科消毒、公共卫生与食品安全由此改写。', pre: ['microscope', 'modern_chem'] },
+  { id: 'thermodynamics', name: '热力学', era: 5, year: '1824年', cat: 'science',
+    desc: '能量守恒与熵增定律揭示了热机的效率上限，也给宇宙一个方向。', pre: ['steam_engine', 'calculus'] },
+  { id: 'steelmaking', name: '转炉炼钢', era: 5, year: '1856年', cat: 'material',
+    desc: '向铁水吹氧脱碳，几分钟内炼出一炉钢，钢价暴跌使铁轨、桥梁与摩天楼成为可能。', pre: ['blast_furnace', 'steam_engine'] },
+  { id: 'evolutionary_theory', name: '进化论', era: 5, year: '1859年', cat: 'science',
+    desc: '用变异与自然选择解释物种的由来，生命史第一次被纳入可检验的自然过程。', pre: ['scientific_method', 'germ_theory'] },
+  { id: 'periodic_table', name: '元素周期表', era: 5, year: '1869年', cat: 'science',
+    desc: '把元素按性质排列成表并预测未知元素，化学从零散事实变成可推演的体系。', pre: ['modern_chem'] },
+  { id: 'fertilizer', name: '化肥', era: 5, year: '1840年', cat: 'life',
+    desc: '按作物需求补充氮磷钾，单位面积产量开始脱离土壤天然肥力的限制。', pre: ['chemical_industry', 'crop_rotation'] },
+  { id: 'bicycle', name: '自行车', era: 5, year: '1817年', cat: 'mech',
+    desc: '依靠链条、滚珠轴承与充气轮胎实现个人交通，这些零件后来几乎原样进入汽车。', pre: ['wheel', 'lathe', 'iron'] },
+  { id: 'oil_well', name: '石油钻井', era: 5, year: '1859年', cat: 'energy',
+    desc: '把地下液态能源大量提取出来，为内燃机与石化工业准备了血液。', pre: ['steam_engine', 'mining'] },
+
+  /* ── 6 电气与化工 ───────────────────────────── */
+  { id: 'generator', name: '发电机', era: 6, year: '1866年', cat: 'energy',
+    desc: '用机械能驱动导体切割磁感线发电，电力从化学电池的奢侈品变成可大规模生产的商品。', pre: ['electromagnetism', 'steam_engine'] },
+  { id: 'transformer', name: '变压器', era: 6, year: '1885年', cat: 'energy',
+    desc: '用电磁感应自由升降电压，使电力可以高压远距离输送、低压安全使用。', pre: ['electromagnetism', 'generator'] },
+  { id: 'lightbulb', name: '白炽灯', era: 6, year: '1879年', cat: 'energy',
+    desc: '真空或惰性气氛中的碳丝把电转为稳定的光，人类活动时间第一次摆脱日照周期。', pre: ['battery', 'generator'] },
+  { id: 'grid', name: '电网', era: 6, year: '1882年', cat: 'energy',
+    desc: '发电、输电、配电与计量组成公共网络，能源第一次像自来水一样按需取用。', pre: ['generator', 'transformer', 'lightbulb'] },
+  { id: 'telephone', name: '电话', era: 6, year: '1876年', cat: 'info',
+    desc: '把声波直接转为电信号实时传输，人际通信不再需要编码与译码训练。', pre: ['telegraph', 'electromagnetism'] },
+  { id: 'radio', name: '无线电', era: 6, year: '1895年', cat: 'info',
+    desc: '利用电磁波在自由空间传播，通信第一次摆脱了导线的物理约束。', pre: ['electromagnetism', 'telegraph'] },
+  { id: 'internal_combustion', name: '内燃机', era: 6, year: '1876年', cat: 'mech',
+    desc: '燃料在气缸内燃烧，热效率与功率密度远高于外燃机，让移动式动力成为现实。', pre: ['steam_engine', 'oil_well', 'thermodynamics'] },
+  { id: 'automobile', name: '汽车', era: 6, year: '1885年', cat: 'mech',
+    desc: '内燃机、转向与制动系统集成在私人车辆上，城市形态与生活方式随之彻底改变。', pre: ['internal_combustion', 'bicycle', 'steelmaking'] },
+  { id: 'petroleum', name: '石油炼制', era: 6, year: '1870年', cat: 'material',
+    desc: '按沸点分馏原油得到燃料与润滑油，同时得到用作化工原料的大量烃类。', pre: ['oil_well', 'chemical_industry'] },
+  { id: 'petrochemicals', name: '石化产品', era: 6, year: '1920年', cat: 'material',
+    desc: '以石油为起点合成溶剂、纤维与单体，化工业从矿物质料转向碳氢化合物。', pre: ['petroleum', 'modern_chem'] },
+  { id: 'plastics', name: '塑料', era: 6, year: '1907年', cat: 'material',
+    desc: '人工聚合的高分子可以任意成型且不锈不腐，材料设计第一次从「取材」变成「造材」。', pre: ['petrochemicals', 'chemical_industry'] },
+  { id: 'hab', name: '合成氨', era: 6, year: '1913年', cat: 'life',
+    desc: '高温高压催化把空气中的氮固定成氨，化肥与炸药同时获得无限原料，养活了此后大半人口。', pre: ['chemical_industry', 'periodic_table'] },
+  { id: 'assembly_line', name: '流水线', era: 6, year: '1913年', cat: 'mech',
+    desc: '把装配拆成标准工序按节拍排布，产品从工匠作品变成低成本可复制的工业品。', pre: ['automobile', 'electric_motor'] },
+  { id: 'airplane', name: '飞机', era: 6, year: '1903年', cat: 'mech',
+    desc: '带动力、可操纵、重于空气的飞行器，人类交通第一次脱离地面。', pre: ['internal_combustion', 'thermodynamics'] },
+  { id: 'vacuum_tube', name: '真空管', era: 6, year: '1904年', cat: 'info',
+    desc: '真空中电子流的可控导通与放大，是第一个电子器件，广播、雷达与早期计算机都依赖它。', pre: ['lightbulb', 'electromagnetism'] },
+  { id: 'radar', name: '雷达', era: 6, year: '1935年', cat: 'info',
+    desc: '主动发射电磁波并接收回波测距测速，第一次在视线之外「看见」目标。', pre: ['radio', 'vacuum_tube'] },
+  { id: 'television', name: '电视', era: 6, year: '1927年', cat: 'info',
+    desc: '把图像扫描成信号再实时重建，大众传播第一次同时具备声音与画面。', pre: ['radio', 'vacuum_tube'] },
+  { id: 'xray', name: 'X 射线', era: 6, year: '1895年', cat: 'science',
+    desc: '穿透组织的短波辐射让体内结构第一次可见，医学影像与晶体学由此开始。', pre: ['vacuum_tube', 'electromagnetism'] },
+  { id: 'quantum', name: '量子力学', era: 6, year: '1900年', cat: 'science',
+    desc: '能量量子化与波函数描述微观世界，此后半导体、激光、核能与量子计算都建立在它之上。', pre: ['xray', 'thermodynamics'] },
+  { id: 'relativity', name: '相对论', era: 6, year: '1905年', cat: 'science',
+    desc: '时间与空间随运动与引力改变，并给出质能等价，为核能与卫星导航的修正提供基础。', pre: ['electromagnetism', 'calculus'] },
+  { id: 'fission', name: '核裂变', era: 6, year: '1938年', cat: 'energy',
+    desc: '重核分裂放出巨大能量，人类第一次掌握远超化学能的能量密度。', pre: ['quantum', 'periodic_table'] },
+  { id: 'antibiotics', name: '抗生素', era: 6, year: '1928年', cat: 'life',
+    desc: '青霉素让细菌感染从绝症变成可治之症，人均寿命在几十年内大幅提升。', pre: ['germ_theory', 'chemical_industry'] },
+  { id: 'reinforced_concrete', name: '钢筋混凝土', era: 6, year: '1867年', cat: 'material',
+    desc: '让混凝土抗压与钢筋抗拉互补，用廉价材料建造高层与大跨度结构成为可能。', pre: ['concrete', 'steelmaking'] },
+
+  /* ── 7 信息时代 ─────────────────────────────── */
+  { id: 'computer', name: '电子计算机', era: 7, year: '1945年', cat: 'compute',
+    desc: '通用可编程的电子机器，第一次让逻辑推理本身成为可被自动执行的工程对象。', pre: ['vacuum_tube', 'radar'] },
+  { id: 'info_theory', name: '信息论', era: 7, year: '1948年', cat: 'science',
+    desc: '香农用比特度量信息并给出信道容量极限，通信与存储第一次有了统一的数学框架。', pre: ['algebra', 'telegraph'] },
+  { id: 'semiconductor', name: '半导体材料', era: 7, year: '1947年', cat: 'material',
+    desc: '掺杂可以精确控制导电性，使电子开关既小又省电，成为所有现代电子器件的物质基础。', pre: ['quantum', 'periodic_table'] },
+  { id: 'transistor', name: '晶体管', era: 7, year: '1947年', cat: 'compute',
+    desc: '固态器件取代真空管，体积、功耗与寿命同时改善，电子设备的普及由此开始。', pre: ['semiconductor', 'vacuum_tube'] },
+  { id: 'programming', name: '编程语言', era: 7, year: '1957年', cat: 'compute',
+    desc: '用接近人类语言的形式描述算法并由编译器翻译，软件第一次成为可分工协作的产物。', pre: ['computer', 'info_theory'] },
+  { id: 'ic', name: '集成电路', era: 7, year: '1958年', cat: 'compute',
+    desc: '把大量元件做在同一块硅片上，摩尔定律开始生效，算力按指数增长数十年。', pre: ['transistor'] },
+  { id: 'lithography', name: '光刻', era: 7, year: '1955年', cat: 'material',
+    desc: '用光把电路图形投影到感光胶上再刻蚀，芯片的产能与精度都取决于这道工序。', pre: ['photography', 'plastics'] },
+  { id: 'microprocessor', name: '微处理器', era: 7, year: '1971年', cat: 'compute',
+    desc: '把整台计算机的运算核心集成到一枚芯片上，计算能力开始可以被嵌入任何设备。', pre: ['ic', 'lithography'] },
+  { id: 'pc', name: '个人电脑', era: 7, year: '1977年', cat: 'compute',
+    desc: '算力交到个人手中，软件业、桌面出版与互联网的终端由此出现。', pre: ['microprocessor'] },
+  { id: 'arpanet', name: '阿帕网', era: 7, year: '1969年', cat: 'info',
+    desc: '分组交换网络首次实测，证明网络可以没有中心、可以容忍节点失效。', pre: ['computer', 'telephone'] },
+  { id: 'internet', name: '互联网', era: 7, year: '1983年', cat: 'info',
+    desc: 'TCP/IP 把异质网络互联成一张开放网，信息传输成本趋近于零。', pre: ['arpanet'] },
+  { id: 'web', name: '万维网', era: 7, year: '1989年', cat: 'info',
+    desc: '超链接与浏览器把互联网从专家工具变成大众媒介，发布信息的门槛降到几乎为零。', pre: ['internet', 'pc'] },
+  { id: 'search', name: '搜索引擎', era: 7, year: '1998年', cat: 'info',
+    desc: '用链接关系与统计排序在无序信息中定位答案，成为信息过载时代的基础设施。', pre: ['web', 'internet'] },
+  { id: 'mobile_phone', name: '移动电话', era: 7, year: '1973年', cat: 'info',
+    desc: '蜂窝组网让人可以边移动边通话，通信的对象从地点变成了人。', pre: ['radio', 'ic'] },
+  { id: 'ann', name: '人工神经网络', era: 7, year: '1957年', cat: 'compute',
+    desc: '模仿神经元连接的可训练加权网络，几经起落后成为机器学习的核心范式。', pre: ['info_theory', 'computer'] },
+  { id: 'rocket', name: '火箭', era: 7, year: '1944年', cat: 'mech',
+    desc: '自带氧化剂、不依赖空气的推进方式，是唯一能离开大气层进入轨道的动力。', pre: ['thermodynamics', 'petroleum'] },
+  { id: 'satellite', name: '人造卫星', era: 7, year: '1957年', cat: 'mech',
+    desc: '第一颗人造天体进入近地轨道，通信、导航、气象与遥感从此有了全球视角。', pre: ['rocket'] },
+  { id: 'atomic_clock', name: '原子钟', era: 7, year: '1955年', cat: 'science',
+    desc: '以原子跃迁频率计时，精度提高到数千万年误差一秒，支撑导航、通信与相对论检验。', pre: ['quantum', 'vacuum_tube'] },
+  { id: 'gps', name: '卫星导航', era: 7, year: '1978年', cat: 'info',
+    desc: '用多颗卫星的信号到达时间差解算位置，全球任意地点的时空坐标变得随时可得。', pre: ['satellite', 'atomic_clock'] },
+  { id: 'laser', name: '激光', era: 7, year: '1960年', cat: 'science',
+    desc: '受激辐射产生高度相干、可聚焦的光束，成为测量、切割、通信与核聚变的手段。', pre: ['quantum', 'optics'] },
+  { id: 'fiber', name: '光纤通信', era: 7, year: '1970年', cat: 'info',
+    desc: '以玻璃纤维中的激光脉冲传输数据，长距离带宽成本大幅下降，互联网的物理基石。', pre: ['laser', 'glass'] },
+  { id: 'nuclear_power', name: '核电', era: 7, year: '1954年', cat: 'energy',
+    desc: '控制链式反应释放裂变能发电，是高能量密度、低排放的基荷电力来源。', pre: ['fission', 'steam_engine'] },
+  { id: 'dna', name: 'DNA 双螺旋', era: 7, year: '1953年', cat: 'life',
+    desc: '遗传信息被确认为碱基序列，生物学第一次拥有了可读写的数字化蓝图。', pre: ['xray', 'chemical_industry'] },
+  { id: 'biotech', name: '基因工程', era: 7, year: '1973年', cat: 'life',
+    desc: '限制酶与质粒让基因可被剪切、拼接与表达，生物体成为可编程的生产系统。', pre: ['dna', 'microscope'] },
+  { id: 'solar_cell', name: '太阳能电池', era: 7, year: '1954年', cat: 'energy',
+    desc: '半导体 PN 结把光子直接变成电流，无需燃料与运动部件即可发电。', pre: ['semiconductor', 'quantum'] },
+  { id: 'battery_li', name: '锂离子电池', era: 7, year: '1991年', cat: 'energy',
+    desc: '极高能量密度且可反复充放，让移动电子设备与电动汽车同时成为可能。', pre: ['modern_chem', 'chemical_industry'] },
+  { id: 'gpu', name: 'GPU', era: 7, year: '1999年', cat: 'compute',
+    desc: '为图形计算设计的并行处理器，意外成为深度学习所需的算力引擎。', pre: ['microprocessor', 'pc'] },
+
+  /* ── 8 智能时代 ─────────────────────────────── */
+  { id: 'big_data', name: '大数据', era: 8, year: '2005年', cat: 'compute',
+    desc: '数据量超过单机处理能力后，分布式存储与计算成为基础设施，数据本身变成生产资料。', pre: ['internet', 'search'] },
+  { id: 'cloud', name: '云计算', era: 8, year: '2006年', cat: 'compute',
+    desc: '算力与存储以服务形式按需租用，计算像水电一样脱离了具体硬件。', pre: ['big_data', 'internet'] },
+  { id: 'smartphone', name: '智能手机', era: 8, year: '2007年', cat: 'compute',
+    desc: '触屏、传感器与移动网络集成在一台随身计算机里，数十亿人同时获得联网终端。', pre: ['mobile_phone', 'web', 'microprocessor'] },
+  { id: 'mobile_internet', name: '移动互联网', era: 8, year: '2007年', cat: 'info',
+    desc: '上网从固定在桌前的行为变成随时在线的常态，服务、支付与社交随之全部重构。', pre: ['smartphone', 'fiber', 'web'] },
+  { id: 'deep_learning', name: '深度学习', era: 8, year: '2012年', cat: 'compute',
+    desc: '深层网络、海量数据与 GPU 算力三者汇合，机器在感知任务上首次接近并超越人类。', pre: ['ann', 'gpu', 'big_data'] },
+  { id: 'llm', name: '大语言模型', era: 8, year: '2020年', cat: 'compute',
+    desc: '在超大规模文本上训练的语言系统，把自然语言直接当作编程接口，知识工作开始被改写。', pre: ['deep_learning', 'cloud'] },
+  { id: 'robotics', name: '机器人', era: 8, year: '2010年', cat: 'mech',
+    desc: '感知、决策与执行合一，机器开始承担在非结构化环境中操作物理世界的任务。', pre: ['deep_learning', 'electric_motor', 'microprocessor'] },
+  { id: 'agents', name: '自主智能体', era: 8, year: '2024年', cat: 'compute',
+    desc: '模型可以规划多步任务、调用工具并自我纠错，AI 由「回答」走向「执行」。', pre: ['llm', 'robotics'] },
+  { id: 'agi', name: '通用人工智能', era: 8, year: '前沿', cat: 'compute',
+    desc: '在广泛任务上达到或超过人类水平并能自主迁移学习的智能系统，仍是尚未实现的目标。', pre: ['agents'] },
+  { id: 'blockchain', name: '区块链', era: 8, year: '2009年', cat: 'info',
+    desc: '用密码学与共识算法在无中心的环境下达成可信账本，价值转移第一次可以不经中介。', pre: ['internet', 'info_theory'] },
+  { id: 'crispr', name: '基因编辑', era: 8, year: '2012年', cat: 'life',
+    desc: '可编程的核酸酶能精确剪切任意基因位点，改写基因组从偶然变成定向操作。', pre: ['biotech', 'dna'] },
+  { id: 'mrna', name: 'mRNA 疫苗', era: 8, year: '2020年', cat: 'life',
+    desc: '把 mRNA 直接送入人体当作蛋白质合成指令，疫苗设计周期从数年压缩到数周。', pre: ['biotech'] },
+  { id: 'pv', name: '光伏发电', era: 8, year: '2010年', cat: 'energy',
+    desc: '成本快速下降的太阳能发电开始在最便宜的新增电源中占优，能源结构转向分布式。', pre: ['solar_cell', 'grid'] },
+  { id: 'ev', name: '电动汽车', era: 8, year: '2008年', cat: 'mech',
+    desc: '三电系统取代燃油动力，汽车从机械产品变成带轮子的智能终端。', pre: ['automobile', 'battery_li', 'grid'] },
+  { id: 'autonomous', name: '自动驾驶', era: 8, year: '2015年', cat: 'mech',
+    desc: '多传感器融合与端到端模型接管驾驶，交通第一次可以不依赖人类的实时判断。', pre: ['ev', 'deep_learning', 'laser', 'gps'] },
+  { id: 'quantum_computing', name: '量子计算', era: 8, year: '2019年', cat: 'compute',
+    desc: '利用叠加与纠缠并行处理状态空间，在特定问题上具备经典计算难以企及的优势。', pre: ['quantum', 'laser', 'lithography'] },
+  { id: 'fusion', name: '可控核聚变', era: 8, year: '2022年', cat: 'energy',
+    desc: '用磁约束或激光惯性约束点燃可控的聚变反应，目标是一劳永逸地解决能源问题。', pre: ['fission', 'laser'] },
+  { id: 'reusable_rocket', name: '可回收火箭', era: 8, year: '2015年', cat: 'mech',
+    desc: '一级火箭垂直回收并复用，把进入轨道的成本降低一个数量级，航天开始具有经济性。', pre: ['rocket', 'microprocessor'] },
+  { id: 'mars', name: '深空探测与地外定居', era: 8, year: '2020s', cat: 'mech',
+    desc: '把人类活动范围扩展到地球之外，是当前技术树唯一还在向外延伸的枝干。', pre: ['reusable_rocket', 'robotics'] },
+];
+</script>
+<script>
+(function () {
+  'use strict';
+
+  const CATS = {
+    energy:   { label: '能源', color: '#ff922b' },
+    material: { label: '材料', color: '#ff6b6b' },
+    mech:     { label: '机械', color: '#ffd43b' },
+    info:     { label: '信息', color: '#4dabf7' },
+    compute:  { label: '计算', color: '#9775fa' },
+    life:     { label: '生命', color: '#51cf66' },
+    science:  { label: '科学', color: '#22d3ee' }
+  };
+
+  const H = 40, VGAP = 16, COLW = 300, SLOT = H + VGAP;
+  const MIN_K = 0.06, MAX_K = 3;
+
+  const svg = document.getElementById('tree');
+  const world = document.getElementById('world');
+  const bandsG = document.getElementById('bands');
+  const edgesG = document.getElementById('edges');
+  const nodesG = document.getElementById('nodes');
+  const panelEl = document.getElementById('panel');
+  const resultsEl = document.getElementById('results');
+  const qEl = document.getElementById('q');
+  const miniSvg = document.querySelector('#mini svg');
+  const axisEl = document.getElementById('axis');
+
+  /* ── 索引 ─────────────────────────────────── */
+  const byId = new Map(NODES.map(n => [n.id, n]));
+  NODES.forEach(n => { n.pre = (n.pre || []).filter(p => byId.has(p)); });
+  const kids = new Map(NODES.map(n => [n.id, []]));
+  NODES.forEach(n => n.pre.forEach(p => kids.get(p).push(n.id)));
+
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // 交给 HTML 解析器解析 SVG 片段后再搬进目标节点：
+  // WebKit 上直接给 SVG 元素赋 innerHTML 不一定生效，这个写法各家一致
+  function fillSVG(el, markup) {
+    const box = document.createElement('div');
+    box.innerHTML = '<svg>' + markup + '</svg>';
+    const src = box.firstElementChild;
+    while (el.firstChild) el.removeChild(el.firstChild);
+    while (src.firstChild) el.appendChild(src.firstChild);
+  }
+
+  function textW(s, size) {
+    let w = 0;
+    for (const ch of s) w += ch.codePointAt(0) > 0x2e80 ? size : size * 0.55;
+    return w;
+  }
+  const nodeW = n => Math.min(240, Math.max(92,
+    Math.round(Math.max(textW(n.name, 13.5), textW(n.year, 10.5)) + 34)));
+
+  /* ── 分层布局：左右为时代，纵向用重心排序降低连线交叉 ── */
+  const cols = ERAS.map(() => []);
+  NODES.forEach(n => cols[n.era].push(n));
+
+  const ord = new Map();
+  cols.forEach(col => col.forEach((n, i) => ord.set(n.id, i)));
+
+  // 同列内也存在依赖（如深度学习 -> 大语言模型），一并纳入重心计算，
+  // 否则列内先后顺序只受邻近时代影响，会出现横跨整列的长连线。
+  function bary(n, dir, e) {
+    const list = (dir > 0 ? n.pre : kids.get(n.id)).map(id => byId.get(id))
+      .filter(m => (dir > 0 ? m.era <= e : m.era >= e));
+    if (!list.length) return ord.get(n.id);
+    let s = 0;
+    for (const m of list) s += ord.get(m.id);
+    return s / list.length;
+  }
+
+  for (let it = 0; it < 12; it++) {
+    const forward = it % 2 === 0;
+    const start = forward ? 1 : ERAS.length - 2;
+    const end = forward ? ERAS.length : -1;
+    const step = forward ? 1 : -1;
+    for (let e = start; e !== end; e += step) {
+      cols[e].slice()
+        .sort((a, b) => bary(a, forward ? 1 : -1, e) - bary(b, forward ? 1 : -1, e) || ord.get(a.id) - ord.get(b.id))
+        .forEach((n, i) => ord.set(n.id, i));
+    }
+  }
+
+  // 同列内再做一次稳定拓扑排序：以重心次序为优先级，保证前置节点一定排在衍生节点之前
+  cols.forEach((col, e) => {
+    const indeg = new Map(), adj = new Map();
+    col.forEach(n => { indeg.set(n.id, 0); adj.set(n.id, []); });
+    col.forEach(n => n.pre.forEach(pid => {
+      const p = byId.get(pid);
+      if (p.era === e) { indeg.set(n.id, indeg.get(n.id) + 1); adj.get(p.id).push(n.id); }
+    }));
+    const ready = col.filter(n => indeg.get(n.id) === 0);
+    const out = [];
+    while (ready.length) {
+      let bi = 0;
+      for (let i = 1; i < ready.length; i++) if (ord.get(ready[i].id) < ord.get(ready[bi].id)) bi = i;
+      const n = ready.splice(bi, 1)[0];
+      out.push(n);
+      for (const k of adj.get(n.id)) {
+        indeg.set(k, indeg.get(k) - 1);
+        if (indeg.get(k) === 0) ready.push(byId.get(k));
+      }
+    }
+    out.forEach((n, i) => ord.set(n.id, i));
+  });
+
+  const P = {};
+  const maxTotal = Math.max(...cols.map(c => (c.length - 1) * SLOT));
+  cols.forEach((col, e) => {
+    const arr = col.slice().sort((a, b) => ord.get(a.id) - ord.get(b.id));
+    const off = (maxTotal - (arr.length - 1) * SLOT) / 2;
+    arr.forEach((n, i) => {
+      P[n.id] = { x: e * COLW + COLW / 2, y: off + i * SLOT + H / 2, e: e, w: nodeW(n) };
+    });
+  });
+
+  const minX = -20, maxX = ERAS.length * COLW + 20;
+  const minY = -70, maxY = maxTotal + H + 70;
+  const W = maxX - minX, HT = maxY - minY;
+
+  /* ── 生成图元 ─────────────────────────────── */
+  const bandParts = [];
+  ERAS.forEach((era, e) => {
+    const x = e * COLW;
+    bandParts.push('<rect class="band' + (e % 2 ? ' alt' : '') + '" x="' + x + '" y="' + minY +
+      '" width="' + COLW + '" height="' + HT + '"/>');
+    bandParts.push('<line class="era-line" x1="' + x + '" y1="' + minY + '" x2="' + x + '" y2="' + maxY + '"/>');
+  });
+  bandParts.push('<line class="era-line" x1="' + (ERAS.length * COLW) + '" y1="' + minY + '" x2="' +
+    (ERAS.length * COLW) + '" y2="' + maxY + '"/>');
+  fillSVG(bandsG, bandParts.join(''));
+
+  const edgeParts = [];
+  NODES.forEach(n => n.pre.forEach(pid => {
+    const a = P[pid], b = P[n.id];
+    let d;
+    if (a.e === b.e) {
+      const xr = Math.max(a.x + a.w / 2, b.x + b.w / 2) + 58;
+      d = 'M' + (a.x + a.w / 2) + ',' + a.y + ' C' + xr + ',' + a.y + ' ' + xr + ',' + b.y + ' ' +
+        (b.x + b.w / 2) + ',' + b.y;
+    } else {
+      const x1 = a.x + a.w / 2, x2 = b.x - b.w / 2;
+      const dx = Math.max(28, (x2 - x1) * 0.42);
+      d = 'M' + x1 + ',' + a.y + ' C' + (x1 + dx) + ',' + a.y + ' ' + (x2 - dx) + ',' + b.y + ' ' + x2 + ',' + b.y;
+    }
+    edgeParts.push('<path class="edge" data-a="' + pid + '" data-b="' + n.id + '" d="' + d + '"/>');
+  }));
+  fillSVG(edgesG, edgeParts.join(''));
+
+  const nodeParts = [];
+  NODES.forEach(n => {
+    const p = P[n.id], c = CATS[n.cat].color, hw = p.w / 2;
+    nodeParts.push(
+      '<g class="node" data-id="' + n.id + '" style="color:' + c + '" transform="translate(' + p.x + ' ' + p.y + ')">' +
+      '<rect class="body" x="' + (-hw) + '" y="' + (-H / 2) + '" width="' + p.w + '" height="' + H + '" rx="9"/>' +
+      '<rect class="accent" x="' + (-hw + 1.5) + '" y="' + (-H / 2 + 7) + '" width="3" height="' + (H - 14) + '" rx="1.5"/>' +
+      '<text class="nm" x="' + (-hw + 14) + '" y="-9" dy=".35em">' + esc(n.name) + '</text>' +
+      '<text class="yr" x="' + (-hw + 14) + '" y="9" dy=".35em">' + esc(n.year) + '</text>' +
+      '<title>' + esc(n.name) + ' · ' + esc(n.year) + ' · ' + CATS[n.cat].label + '</title>' +
+      '</g>');
+  });
+  fillSVG(nodesG, nodeParts.join(''));
+
+  const nodeEls = Array.from(nodesG.children);
+  const edgeEls = Array.from(edgesG.children);
+  document.getElementById('stat').textContent = NODES.length + ' 项技术 · ' +
+    NODES.reduce((s, n) => s + n.pre.length, 0) + ' 条依赖 · ' + ERAS.length + ' 个时代';
+
+  /* ── 缩略图 ───────────────────────────────── */
+  miniSvg.setAttribute('viewBox', minX + ' ' + minY + ' ' + W + ' ' + HT);
+  miniSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  const miniParts = NODES.map(n => {
+    const p = P[n.id];
+    return '<rect x="' + (p.x - p.w / 2) + '" y="' + (p.y - H / 2) + '" width="' + p.w + '" height="' + H +
+      '" rx="6" fill="' + CATS[n.cat].color + '" opacity=".75"/>';
+  }).join('') +
+    '<rect x="' + minX + '" y="' + minY + '" width="' + W + '" height="' + HT +
+    '" fill="none" stroke="#2b3849" stroke-width="4"/>';
+  fillSVG(miniSvg, miniParts);
+  const vpEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  vpEl.setAttribute('class', 'vp');
+  miniSvg.appendChild(vpEl);
+  miniSvg.setAttribute('width', 190);
+  miniSvg.setAttribute('height', Math.round(190 * HT / W));
+
+  /* ── 视图 ─────────────────────────────────── */
+  const view = { x: 0, y: 0, k: 1 };
+  const size = () => { const r = svg.getBoundingClientRect(); return { w: r.width, h: r.height }; };
+  const clampK = k => Math.min(MAX_K, Math.max(MIN_K, k));
+
+  function apply() {
+    world.setAttribute('transform', 'translate(' + view.x + ' ' + view.y + ') scale(' + view.k + ')');
+    const s = size();
+    axisEls.forEach((el, e) => {
+      const x0 = view.x + e * COLW * view.k, w = COLW * view.k;
+      const vis = w >= 56 && x0 < s.w && x0 + w > 0;
+      el.classList.toggle('hide', !vis);
+      if (!vis) return;
+      el.style.left = x0 + 'px';
+      el.style.width = w + 'px';
+      el.classList.toggle('narrow', w < 138);
+    });
+    const wx = (0 - view.x) / view.k, wy = (0 - view.y) / view.k;
+    vpEl.setAttribute('x', wx); vpEl.setAttribute('y', wy);
+    vpEl.setAttribute('width', s.w / view.k); vpEl.setAttribute('height', s.h / view.k);
+  }
+
+  let anim = null;
+  function stopAnim() { if (anim) { cancelAnimationFrame(anim); anim = null; } }
+  function animateTo(tx, ty, tk) {
+    stopAnim();
+    const s = { x: view.x, y: view.y, k: view.k }, t0 = performance.now();
+    const dur = 420;
+    (function step(t) {
+      const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      view.x = s.x + (tx - s.x) * e; view.y = s.y + (ty - s.y) * e; view.k = s.k + (tk - s.k) * e;
+      apply();
+      if (p < 1) anim = requestAnimationFrame(step); else anim = null;
+    })(t0);
+  }
+  function zoomAt(px, py, factor, animate) {
+    const tk = clampK(view.k * factor);
+    const tx = px - (px - view.x) * (tk / view.k);
+    const ty = py - (py - view.y) * (tk / view.k);
+    if (animate) animateTo(tx, ty, tk); else { view.x = tx; view.y = ty; view.k = tk; apply(); }
+  }
+  function fit(animate) {
+    const s = size(), pad = 30;
+    const k = Math.min((s.w - pad * 2) / W, (s.h - pad * 2 - 60) / HT);
+    const tx = s.w / 2 - (minX + W / 2) * k, ty = (s.h + 40) / 2 - (minY + HT / 2) * k;
+    if (animate) animateTo(tx, ty, k); else { view.x = tx; view.y = ty; view.k = k; apply(); }
+  }
+  function home() {
+    const s = size(), k = 0.85;
+    view.k = k; view.x = 70 - minX * k; view.y = s.h / 2 - (minY + HT / 2) * k; apply();
+  }
+
+  /* ── 选中与高亮 ───────────────────────────── */
+  let selected = null, hovered = null, catFilter = null, hits = new Set();
+
+  function walk(id, dir, set) {
+    set.add(id);
+    const list = dir > 0 ? byId.get(id).pre : kids.get(id);
+    for (const x of list) if (!set.has(x)) walk(x, dir, set);
+  }
+  function relate(id) { const s = new Set(); walk(id, 1, s); walk(id, -1, s); return s; }
+
+  function refresh() {
+    const focus = hovered || selected;
+    const rel = focus ? relate(focus) : null;
+    for (const el of nodeEls) {
+      const id = el.dataset.id, cat = byId.get(id).cat;
+      el.classList.toggle('sel', id === selected);
+      el.classList.toggle('rel', !!rel && rel.has(id) && id !== selected);
+      el.classList.toggle('dim', (!!rel && !rel.has(id)) || (!!catFilter && cat !== catFilter));
+      el.classList.toggle('hit', hits.has(id));
+    }
+    for (const el of edgeEls) {
+      const a = byId.get(el.dataset.a), b = byId.get(el.dataset.b);
+      const on = !!rel && rel.has(a.id) && rel.has(b.id);
+      el.classList.toggle('hl', on);
+      el.classList.toggle('dim', (!!rel && !on) || (!!catFilter && (a.cat !== catFilter || b.cat !== catFilter)));
+    }
+  }
+
+  const centerOf = id => {
+    const s = size(), k = Math.max(view.k, 0.8), cy = s.w < 780 ? s.h * 0.34 : s.h * 0.5;
+    return { x: s.w / 2 - P[id].x * k, y: cy - P[id].y * k, k: k };
+  };
+
+  function showPanel(id) {
+    const n = byId.get(id), cat = CATS[n.cat];
+    const ups = n.pre.map(x => byId.get(x)), downs = kids.get(id).map(x => byId.get(x));
+    const chip = m => '<button class="chip" data-go="' + m.id + '" style="--c:' + CATS[m.cat].color + '">' +
+      '<i></i>' + esc(m.name) + '<em>' + esc(m.year) + '</em></button>';
+    panelEl.innerHTML =
+      '<button class="close" data-close title="关闭">×</button>' +
+      '<div class="catline" style="background:' + cat.color + '"></div>' +
+      '<h2>' + esc(n.name) + '</h2>' +
+      '<div class="meta">' +
+        '<span class="tag">' + esc(ERAS[n.era].name) + '</span>' +
+        '<span class="tag">' + esc(n.year) + '</span>' +
+        '<span class="tag" style="color:' + cat.color + '">' + cat.label + '</span>' +
+      '</div>' +
+      '<p>' + esc(n.desc) + '</p>' +
+      (ups.length ? '<h3>前置条件 · ' + ups.length + '</h3><div class="chips">' + ups.map(chip).join('') + '</div>' : '') +
+      (downs.length ? '<h3>衍生技术 · ' + downs.length + '</h3><div class="chips">' + downs.map(chip).join('') + '</div>' : '');
+    panelEl.classList.add('open');
+  }
+
+  function go(id, center) {
+    selected = id;
+    showPanel(id);
+    refresh();
+    if (center !== false) { const c = centerOf(id); animateTo(c.x, c.y, c.k); }
+  }
+
+  /* ── 交互：拖拽 / 缩放 ────────────────────── */
+  const ptrs = new Map();
+  let drag = null, pinch = null, moved = 0, downNode = null;
+
+  svg.addEventListener('pointerdown', e => {
+    stopAnim();
+    try { svg.setPointerCapture(e.pointerId); } catch (err) { /* 个别实现会拒绝未激活的 pointerId */ }
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const r = svg.getBoundingClientRect();
+    if (ptrs.size === 1) {
+      drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+      moved = 0;
+      const g = e.target.closest && e.target.closest('.node');
+      downNode = g ? g.dataset.id : null;
+      svg.classList.add('grabbing');
+    } else if (ptrs.size === 2) {
+      drag = null; downNode = null;
+      const [a, b] = [...ptrs.values()];
+      pinch = {
+        d: Math.hypot(a.x - b.x, a.y - b.y),
+        mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top,
+        x: view.x, y: view.y, k: view.k
+      };
+    }
+  });
+
+  svg.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const r = svg.getBoundingClientRect();
+    if (ptrs.size >= 2 && pinch) {
+      const [a, b] = [...ptrs.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+      const k = clampK(pinch.k * (d / pinch.d)), ratio = k / pinch.k;
+      view.k = k;
+      view.x = mx - (pinch.mx - pinch.x) * ratio;
+      view.y = my - (pinch.my - pinch.y) * ratio;
+      apply();
+    } else if (drag) {
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) moved = 1;
+      view.x = drag.vx + dx; view.y = drag.vy + dy;
+      apply();
+    }
+  });
+
+  function endPointer(e) {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.delete(e.pointerId);
+    if (ptrs.size === 0) {
+      if (!moved && downNode) go(downNode, false);
+      drag = null; pinch = null; downNode = null;
+      svg.classList.remove('grabbing');
+    } else if (ptrs.size === 1) {
+      pinch = null;
+      const p = [...ptrs.values()][0];
+      drag = { x: p.x, y: p.y, vx: view.x, vy: view.y };
+    }
+  }
+  svg.addEventListener('pointerup', endPointer);
+  svg.addEventListener('pointercancel', endPointer);
+
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    stopAnim();
+    const r = svg.getBoundingClientRect();
+    zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0016), false);
+  }, { passive: false });
+
+  // iOS 会把自己的双指手势看成页面缩放，这里自己接管
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
+    svg.addEventListener(ev, e => e.preventDefault()));
+
+  /* ── 交互：悬停 ───────────────────────────── */
+  nodesG.addEventListener('mouseover', e => {
+    const g = e.target.closest && e.target.closest('.node');
+    if (g && g.dataset.id !== hovered) { hovered = g.dataset.id; refresh(); }
+  });
+  nodesG.addEventListener('mouseout', e => {
+    if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.node')) return;
+    if (hovered) { hovered = null; refresh(); }
+  });
+
+  /* ── 交互：搜索 / 图例 / 工具 / 缩略图 ─────── */
+  function search(v) {
+    hits = new Set();
+    const s = v.trim();
+    if (s) NODES.forEach(n => {
+      if (n.name.includes(s) || n.desc.includes(s) || n.year.includes(s) || CATS[n.cat].label.includes(s))
+        hits.add(n.id);
+    });
+    const list = [...hits].slice(0, 24);
+    resultsEl.innerHTML = list.map(id => {
+      const n = byId.get(id);
+      return '<button class="res" data-go="' + id + '">' + esc(n.name) +
+        '<span>' + esc(ERAS[n.era].name) + ' · ' + esc(n.year) + '</span></button>';
+    }).join('');
+    resultsEl.classList.toggle('open', !!s && list.length > 0);
+    refresh();
+  }
+  qEl.addEventListener('input', () => search(qEl.value));
+  qEl.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { qEl.value = ''; search(''); resultsEl.classList.remove('open'); }
+    if (e.key === 'Enter') { const f = [...hits][0]; if (f) { go(f); resultsEl.classList.remove('open'); } }
+  });
+
+  resultsEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-go]');
+    if (b) { go(b.dataset.go); resultsEl.classList.remove('open'); qEl.blur(); }
+  });
+
+  const legendEl = document.getElementById('legend');
+  legendEl.innerHTML = Object.keys(CATS).map(k =>
+    '<button class="lg" data-cat="' + k + '" style="color:' + CATS[k].color + '"><i></i>' + CATS[k].label + '</button>'
+  ).join('');
+  legendEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-cat]');
+    if (!b) return;
+    catFilter = catFilter === b.dataset.cat ? null : b.dataset.cat;
+    [...legendEl.children].forEach(el => el.classList.toggle('on', el.dataset.cat === catFilter));
+    refresh();
+  });
+
+  document.querySelector('.tools').addEventListener('click', e => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const s = size();
+    const act = b.dataset.act;
+    if (act === 'in') zoomAt(s.w / 2, s.h / 2, 1.35, true);
+    if (act === 'out') zoomAt(s.w / 2, s.h / 2, 1 / 1.35, true);
+    if (act === 'fit') fit(true);
+    if (act === 'reset') { qEl.value = ''; search(''); home(); }
+  });
+
+  panelEl.addEventListener('click', e => {
+    const x = e.target.closest('[data-close]');
+    if (x) { panelEl.classList.remove('open'); selected = null; refresh(); return; }
+    const g = e.target.closest('[data-go]');
+    if (g) go(g.dataset.go);
+  });
+
+  const axisEls = ERAS.map(era => {
+    const el = document.createElement('div');
+    el.className = 'ey hide';
+    el.innerHTML = '<b>' + esc(era.name) + '</b><s>' + esc(era.sub) + '</s>';
+    axisEl.appendChild(el);
+    return el;
+  });
+  const hdrEl = document.querySelector('header');
+  function syncHdr() {
+    document.documentElement.style.setProperty('--hdr', hdrEl.offsetHeight + 'px');
+    apply();
+  }
+  if (window.ResizeObserver) new ResizeObserver(syncHdr).observe(hdrEl);
+  else window.addEventListener('resize', syncHdr);
+  syncHdr();
+
+  const mini = document.getElementById('mini');
+  mini.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    const r = miniSvg.getBoundingClientRect();
+    const wx = minX + (e.clientX - r.left) / r.width * W;
+    const wy = minY + (e.clientY - r.top) / r.height * HT;
+    const s = size();
+    animateTo(s.w / 2 - wx * view.k, s.h / 2 - wy * view.k, view.k);
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { panelEl.classList.remove('open'); selected = null; refresh(); }
+    if (e.key === '+' || e.key === '=') { const s = size(); zoomAt(s.w / 2, s.h / 2, 1.35, true); }
+    if (e.key === '-') { const s = size(); zoomAt(s.w / 2, s.h / 2, 1 / 1.35, true); }
+    if (e.key === '0') fit(true);
+  });
+
+  window.addEventListener('resize', apply);
+
+  // 打开时从最早的几列开始，避免整图缩得太小
+  home();
+})();
+</script>
+</body>
+</html>
