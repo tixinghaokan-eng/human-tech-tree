@@ -44,7 +44,7 @@
   /* ── 时代轴 ───────────────────────────── */
   #axis{position:absolute; left:0; right:0; top:var(--hdr,58px); height:34px; z-index:4; overflow:hidden;
     pointer-events:none; border-bottom:1px solid #ffffff0f;
-    background:linear-gradient(#070a0ff2 55%,#070a0f99 80%,#070a0f00)}
+    background:linear-gradient(#070a0f 0%,#070a0f 80%,#070a0f00 100%)}
   #axis .ey{position:absolute; top:0; height:34px; display:flex; flex-direction:column; align-items:center;
     justify-content:center; overflow:hidden; white-space:nowrap; border-left:1px solid #ffffff14}
   #axis .ey b{font-size:12px; font-weight:600; color:#9db0c4; letter-spacing:.06em}
@@ -55,7 +55,7 @@
   /* ── 顶栏 ─────────────────────────────── */
   header{position:absolute; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; gap:12px;
     padding:12px 14px; pointer-events:none; flex-wrap:wrap;
-    background:linear-gradient(#070a0fee,#070a0f00)}
+    background:linear-gradient(#070a0f 0%,#070a0f 86%,#070a0f00 100%)}
   header>*{pointer-events:auto}
   h1{margin:0; font-size:15px; font-weight:600; letter-spacing:.08em; white-space:nowrap}
   h1 span{color:var(--dim); font-size:11.5px; font-weight:400; margin-left:8px; letter-spacing:0}
@@ -770,8 +770,8 @@ const NODES = [
     if (animate) animateTo(tx, ty, k); else { view.x = tx; view.y = ty; view.k = k; apply(); }
   }
   function home() {
-    const s = size(), k = 0.85;
-    view.k = k; view.x = 70 - minX * k; view.y = s.h / 2 - (minY + HT / 2) * k; apply();
+    const s = size(), k = 0.85, m = s.w < 520 ? 28 : 70;
+    view.k = k; view.x = m - minX * k; view.y = s.h / 2 - (minY + HT / 2) * k; apply();
   }
 
   /* ── 选中与高亮 ───────────────────────────── */
